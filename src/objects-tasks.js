@@ -349,35 +349,125 @@ function group(array, keySelector, valueSelector) {
  *  For more examples see unit tests.
  */
 
-const cssSelectorBuilder = {
-  element(/* value */) {
-    throw new Error('Not implemented');
-  },
+const builder = () => {
+  return {
+    selector: [],
 
-  id(/* value */) {
-    throw new Error('Not implemented');
-  },
+    element(value) {
+      if (this.selector.length) {
+        this.selector.length = 0;
+        throw new Error(
+          'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
+        );
+      }
 
-  class(/* value */) {
-    throw new Error('Not implemented');
-  },
+      const b = builder();
+      b.selector.push(value);
+      b.element = () => {
+        this.selector.length = 0;
+        throw new Error(
+          'Element, id and pseudo-element should not occur more then one time inside the selector'
+        );
+      };
+      return b;
+    },
 
-  attr(/* value */) {
-    throw new Error('Not implemented');
-  },
+    id(value) {
+      if (!this.selector.length) {
+        const b = builder();
+        b.selector.push(`#${value}`);
+        return b;
+      }
 
-  pseudoClass(/* value */) {
-    throw new Error('Not implemented');
-  },
+      if (this.selector.some((el) => el.startsWith('#'))) {
+        this.selector.length = 0;
+        throw new Error(
+          'Element, id and pseudo-element should not occur more then one time inside the selector'
+        );
+      }
 
-  pseudoElement(/* value */) {
-    throw new Error('Not implemented');
-  },
+      const prev = this.selector[this.selector.length - 1];
+      if (
+        prev &&
+        (prev.startsWith('.') || prev.startsWith('[') || prev.startsWith(':'))
+      ) {
+        this.selector.length = 0;
+        throw new Error(
+          'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
+        );
+      }
 
-  combine(/* selector1, combinator, selector2 */) {
-    throw new Error('Not implemented');
-  },
+      this.selector.push(`#${value}`);
+      return this;
+    },
+
+    class(value) {
+      const prev = this.selector[this.selector.length - 1];
+      if (prev && (prev.startsWith('[') || prev.startsWith(':'))) {
+        this.selector.length = 0;
+        throw new Error(
+          'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
+        );
+      }
+
+      this.selector.push(`.${value}`);
+      return this;
+    },
+
+    attr(value) {
+      const prev = this.selector[this.selector.length - 1];
+      if (prev && prev.startsWith(':')) {
+        this.selector.length = 0;
+        throw new Error(
+          'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
+        );
+      }
+      this.selector.push(`[${value}]`);
+      return this;
+    },
+
+    pseudoClass(value) {
+      const prev = this.selector[this.selector.length - 1];
+      if (prev && prev.startsWith('::')) {
+        this.selector.length = 0;
+        throw new Error(
+          'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
+        );
+      }
+      this.selector.push(`:${value}`);
+      return this;
+    },
+
+    pseudoElement(value) {
+      if (this.selector.find((el) => el.startsWith('::'))) {
+        this.selector.length = 0;
+        throw new Error(
+          'Element, id and pseudo-element should not occur more then one time inside the selector'
+        );
+      }
+
+      this.selector.push(`::${value}`);
+      return this;
+    },
+
+    combine(selector1, combinator, selector2) {
+      const b = builder();
+
+      b.selector.push(selector1.stringify());
+      b.selector.push(` ${combinator} `);
+      b.selector.push(selector2.stringify());
+      return b;
+    },
+
+    stringify() {
+      const str = this.selector.join('');
+      this.selector.length = 0;
+      return str;
+    },
+  };
 };
+
+const cssSelectorBuilder = builder();
 
 module.exports = {
   shallowCopy,
